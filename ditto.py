@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 import json
 import os
 import shutil
 from pathlib import Path
+from dataclasses import dataclass
 
 UE_ENGINE_FOLDER_NAME = "Engine"
 UE_ENGINE_BUILD_FOLDER_NAME = "Build"
@@ -16,6 +17,7 @@ UE_PLATFORM_WINDOWS_NAME = "Win64"
 UE_PLUGINS_FOLDER_NAME = "Plugins"
 UE_MARKETPLACE_PLUGINS_FOLDER_NAME = "Marketplace"
 UE_CONFIG_FOLDER_NAME = "Config"
+UE_CONTENT_FOLDER_NAME = "Content"
 UE_SOURCE_FOLDER_NAME = "Source"
 UE_PRIVATE_FOLDER_NAME = "Private"
 UE_PUBLIC_FOLDER_NAME = "Public"
@@ -26,6 +28,14 @@ UE_CONFIG_EXT = "ini"
 UE_CPP_SOURCE_EXT = "cpp"
 UE_CPP_HEADER_EXT = "h"
 UE_BUILD_CSHARP_EXT = f"{UE_ENGINE_BUILD_FOLDER_NAME}.cs"
+
+
+@dataclass
+class UnrealPlugin:
+    root: Path
+    copy_binaries: bool
+    # plugin_file: TextIO
+    # version: float
 
 
 def create_empty_file(path: os.PathLike) -> None:
@@ -63,6 +73,19 @@ def create_unreal_build_csharp_file(path: os.PathLike, module_name: str) -> None
         f.writelines(lines)
 
 
+def match_ue_filepath_in_folder(unreal_path: Path, unreal_file_name: str,
+                                dirs_to_join: Sequence[str]) -> bool:
+    if unreal_path.exists():
+        unreal_file_path = unreal_path / unreal_file_name
+    else:
+        unreal_file_path = unreal_path
+
+    ue_path_pattern = Path("*").joinpath(
+        *dirs_to_join,
+        unreal_file_name).as_posix()
+    return unreal_file_path.match(ue_path_pattern)
+
+
 def is_ue_engine_install(unreal_install_path: Path) -> bool:
     # How does epic measure what is an Unreal Engine installation "Engine" folder?
     # Engine/Source/Developer/DesktopPlatform/Private/DesktopPlatformBase.cpp#401
@@ -72,25 +95,46 @@ def is_ue_engine_install(unreal_install_path: Path) -> bool:
     engine_binaries_path = engine_path / UE_BINARIES_FOLDER_NAME
     engine_build_path = engine_path / UE_ENGINE_BUILD_FOLDER_NAME
 
-    if engine_binaries_path.exists():
-        engine_build_version_path = engine_build_path / UE_ENGINE_BUILD_VERSION_FILE_NAME
-    else:
-        engine_build_version_path = Path(".")
+    engine_build_dirs = UE_ENGINE_FOLDER_NAME, UE_ENGINE_BUILD_FOLDER_NAME
+    if (engine_binaries_path.exists()
+            and match_ue_filepath_in_folder(unreal_path=engine_build_path,
+                                            unreal_file_name=UE_ENGINE_BUILD_VERSION_FILE_NAME,
+                                            dirs_to_join=engine_build_dirs)):
+        return True
 
-    engine_path_pattern = Path("*").joinpath(
-        UE_ENGINE_FOLDER_NAME,
-        UE_ENGINE_BUILD_FOLDER_NAME,
-        UE_ENGINE_BUILD_VERSION_FILE_NAME).as_posix()
-    return engine_build_version_path.match(engine_path_pattern)
+    return False
 
 
-def is_ue_plugin(unreal_plugin_path: Path) -> bool:
-    plugin_match_pattern = f"*.{UE_UPLUGIN_EXT}"
-    return unreal_plugin_path.match(plugin_match_pattern)
+def is_ue_project(unreal_project_path: Path) -> bool:
+    uproject_file_name = f"{unreal_project_path.stem}.{UE_UPROJECT_EXT}"
+
+    return match_ue_filepath_in_folder(unreal_path=unreal_project_path, unreal_file_name=uproject_file_name,
+                                       dirs_to_join=(unreal_project_path.stem,))
 
 
-def make_mock_unreal_plugin(path: Path, plugin_name: str):
+def ue_marketplace_plugins(unreal_install_path: Path) -> tuple | tuple[Path]:
+    if not is_ue_engine_install(unreal_install_path):
+        return ()
+    engine_plugins_path = unreal_install_path / UE_ENGINE_FOLDER_NAME / UE_PLUGINS_FOLDER_NAME
+    marketplace_plugins = engine_plugins_path.glob(f"{UE_MARKETPLACE_PLUGINS_FOLDER_NAME}/*/*.{UE_UPLUGIN_EXT}")
+    # TODO: return array of UnrealPlugin dataclasses?
+    return tuple([plugin_path.parent for plugin_path in marketplace_plugins])
 
+
+def copy_ue_plugin(unreal_plugin_path: os.PathLike, dest_path: os.PathLike,
+                   overwrite_files: bool) -> os.PathLike:
+    return shutil.copytree(src=unreal_plugin_path, dst=dest_path,
+                           dirs_exist_ok=overwrite_files)
+
+
+def copy_ue_plugin_no_binaries(unreal_plugin_path: os.PathLike, dest_path: os.PathLike,
+                               overwrite_files: bool) -> os.PathLike:
+    ignore_pattern = shutil.ignore_patterns("Binaries")
+    return shutil.copytree(src=unreal_plugin_path, dst=dest_path, ignore=ignore_pattern,
+                           dirs_exist_ok=overwrite_files)
+
+
+def make_mock_unreal_plugin(path: Path, plugin_name: str) -> None:
     mock_plugin_name = f"{plugin_name}Plugin"
     mock_plugin_editor_module_name = f"{mock_plugin_name}Editor"
     mock_uplugin_data = {
@@ -169,8 +213,7 @@ def make_mock_unreal_plugin(path: Path, plugin_name: str):
     create_unreal_data_file(path=mock_uplugin_file_path, data=mock_uplugin_data, indent="\t")
 
 
-def make_mock_unreal_install(path: Path) -> None:
-
+def make_mock_unreal_install(path: Path, name: str) -> None:
     mock_build_version_data = {
         "MajorVersion": 5,
         "MinorVersion": 3,
@@ -189,7 +232,7 @@ def make_mock_unreal_install(path: Path) -> None:
         }
     }
 
-    mock_unreal_install = path / "FakeUnrealInstall"
+    mock_unreal_install = path / name
 
     mock_unreal_engine_folder = mock_unreal_install / UE_ENGINE_FOLDER_NAME
     mock_unreal_binaries_folder = mock_unreal_engine_folder / UE_BINARIES_FOLDER_NAME / UE_PLATFORM_WINDOWS_NAME
@@ -205,7 +248,7 @@ def make_mock_unreal_install(path: Path) -> None:
           f"Removing Fake Unreal Installation...")
     shutil.rmtree(mock_unreal_install, ignore_errors=True)
     print(f"Fake Install Exists: {mock_unreal_install.exists()}\n"
-          f"{'_'*10}")
+          f"{'_' * 10}")
 
     # Start making the mock installation
     Path.mkdir(mock_unreal_binaries_folder, parents=True)
@@ -219,8 +262,7 @@ def make_mock_unreal_install(path: Path) -> None:
     make_mock_unreal_plugin(path=mock_unreal_marketplace_plugins_folder, plugin_name="FakeMarketplaceTwo")
 
 
-def make_mock_unreal_project(path: Path):
-
+def make_mock_unreal_project(path: Path, name: str) -> None:
     mock_uproject_data = {
         "FileVersion": 3,
         "EngineAssociation": "5.3",
@@ -255,7 +297,7 @@ def make_mock_unreal_project(path: Path):
             "Windows"
         ]
     }
-    mock_uproject_name = "FakeUnrealProject"
+    mock_uproject_name = name
 
     mock_default_editor_config_name = f"DefaultEditor.{UE_CONFIG_EXT}"
     mock_default_engine_config_name = f"Default{UE_ENGINE_FOLDER_NAME}.{UE_CONFIG_EXT}"
@@ -263,10 +305,15 @@ def make_mock_unreal_project(path: Path):
 
     mock_unreal_project_root = path / mock_uproject_name
     mock_unreal_project_config_folder = mock_unreal_project_root / UE_CONFIG_FOLDER_NAME
+    mock_unreal_project_content_folder = mock_unreal_project_root / UE_CONTENT_FOLDER_NAME
     mock_unreal_project_plugins_folder = mock_unreal_project_root / UE_PLUGINS_FOLDER_NAME
     mock_unreal_project_file_path = mock_unreal_project_root / f"{mock_uproject_name}.{UE_UPROJECT_EXT}"
 
+    print(f"Fake Unreal Project Exists: {mock_unreal_project_root.exists()}\n"
+          f"Removing Fake Unreal Project...")
     shutil.rmtree(mock_unreal_project_root, ignore_errors=True)
+    print(f"Fake Project Exists: {mock_unreal_project_root.exists()}\n"
+          f"{'_' * 10}")
 
     # Start making the mock unreal project
     Path.mkdir(mock_unreal_project_config_folder, parents=True)
@@ -275,3 +322,4 @@ def make_mock_unreal_project(path: Path):
     create_empty_file(path=mock_unreal_project_config_folder / mock_default_game_config_name)
     Path.mkdir(mock_unreal_project_plugins_folder)
     create_unreal_data_file(path=mock_unreal_project_file_path, data=mock_uproject_data, indent="\t")
+    Path.mkdir(mock_unreal_project_content_folder)

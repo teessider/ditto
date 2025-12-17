@@ -1,5 +1,5 @@
-import shutil
 from pathlib import Path
+import json
 import pprint
 
 import ditto
@@ -29,7 +29,6 @@ if __name__ == '__main__':
 
     plugins_to_copy: list = []
     dest_project = Path(".")
-    copy_ignore = shutil.ignore_patterns("Binaries")
 
     for test_path in test_unreal_engine_folders:
         test_install_path = Path.cwd() / test_path
@@ -50,7 +49,16 @@ if __name__ == '__main__':
     test_copy_plugins_binaries = [True, False, False]  # These values would come from some UI or other input...
     plugin_to_copy: Path
     for copy_val, plugin_to_copy in enumerate(plugins_to_copy):
-        plugin = ditto.UnrealPlugin(root=plugin_to_copy, copy_binaries=test_copy_plugins_binaries[copy_val])
+        plugin_file = plugin_to_copy / f"{plugin_to_copy.name}.{ditto.UE_UPLUGIN_EXT}"
+        plugin_version = "0.0"
+        with plugin_file.open("r") as p_file:
+            plugin_data: dict = json.load(p_file)
+            version = plugin_data["Version"]
+            version_name = plugin_data["VersionName"]
+            print(version, type(version), version_name, type(version_name))
+        plugin = ditto.UnrealPlugin(root=plugin_to_copy,
+                                    copy_binaries=test_copy_plugins_binaries[copy_val],
+                                    version=plugin_version)
         unreal_plugins_to_copy.append(plugin)
 
     print(f"{pprint.pformat(unreal_plugins_to_copy)}\n{'_' * 10}")

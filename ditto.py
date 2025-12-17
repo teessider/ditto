@@ -35,7 +35,7 @@ class UnrealPlugin:
     root: Path
     copy_binaries: bool
     # plugin_file: TextIO
-    # version: float
+    version: str
 
 
 def create_empty_file(path: os.PathLike) -> None:

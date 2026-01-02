@@ -5,7 +5,7 @@ import json
 import os
 import shutil
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 UE_ENGINE_FOLDER_NAME = "Engine"
 UE_ENGINE_BUILD_FOLDER_NAME = "Build"
@@ -32,10 +32,18 @@ UE_BUILD_CSHARP_EXT = f"{UE_ENGINE_BUILD_FOLDER_NAME}.cs"
 
 @dataclass
 class UnrealPlugin:
-    root: Path
+    plugin_file: Path
     copy_binaries: bool
-    # plugin_file: TextIO
-    version: str
+    root: Path = field(init=False)
+    name: str = field(init=False)
+    version: str = field(init=False)
+    version_name: str = field(init=False)
+
+    def __post_init__(self):
+        self.root = self.plugin_file.parent
+        self.name = self.plugin_file.stem
+        self.version = str(1)
+        self.version_name = str(0.0)
 
 
 def create_empty_file(path: os.PathLike) -> None:
@@ -112,13 +120,12 @@ def is_ue_project(unreal_project_path: Path) -> bool:
                                        dirs_to_join=(unreal_project_path.stem,))
 
 
-def ue_marketplace_plugins(unreal_install_path: Path) -> tuple | tuple[Path]:
+def ue_marketplace_plugins(unreal_install_path: Path) -> tuple | tuple[UnrealPlugin]:
     if not is_ue_engine_install(unreal_install_path):
         return ()
     engine_plugins_path = unreal_install_path / UE_ENGINE_FOLDER_NAME / UE_PLUGINS_FOLDER_NAME
     marketplace_plugins = engine_plugins_path.glob(f"{UE_MARKETPLACE_PLUGINS_FOLDER_NAME}/*/*.{UE_UPLUGIN_EXT}")
-    # TODO: return array of UnrealPlugin dataclasses?
-    return tuple([plugin_path.parent for plugin_path in marketplace_plugins])
+    return tuple([UnrealPlugin(plugin_file=plugin_file, copy_binaries=True) for plugin_file in marketplace_plugins])
 
 
 def copy_ue_plugin(unreal_plugin_path: os.PathLike, dest_path: os.PathLike,

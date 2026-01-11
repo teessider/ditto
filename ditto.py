@@ -115,8 +115,8 @@ def is_ue_engine_install(unreal_install_path: Path) -> bool:
 
 def is_ue_project(unreal_project_path: Path) -> bool:
     uproject_file_name = f"{unreal_project_path.stem}.{UE_UPROJECT_EXT}"
-
-    return match_ue_filepath_in_folder(unreal_path=unreal_project_path, unreal_file_name=uproject_file_name,
+    return match_ue_filepath_in_folder(unreal_path=unreal_project_path,
+                                       unreal_file_name=uproject_file_name,
                                        dirs_to_join=(unreal_project_path.stem,))
 
 

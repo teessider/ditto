@@ -88,6 +88,8 @@ def match_ue_filepath_in_folder(unreal_path: Path, unreal_file_name: str,
     else:
         unreal_file_path = unreal_path
 
+    # Using "*" ensures that anything before "/Engine/" or "/ExampleProject/"
+    # doesn't matter as this should be a relative pattern match.
     ue_path_pattern = Path("*").joinpath(
         *dirs_to_join,
         unreal_file_name).as_posix()
@@ -104,14 +106,11 @@ def is_ue_engine_install(unreal_install_path: Path) -> bool:
     engine_build_path = engine_path / UE_ENGINE_BUILD_FOLDER_NAME
 
     engine_build_dirs = UE_ENGINE_FOLDER_NAME, UE_ENGINE_BUILD_FOLDER_NAME
-    if (engine_binaries_path.exists()
-            and match_ue_filepath_in_folder(unreal_path=engine_build_path,
-                                            unreal_file_name=UE_ENGINE_BUILD_VERSION_FILE_NAME,
-                                            dirs_to_join=engine_build_dirs)):
-        return True
-
-    return False
-
+    return (engine_binaries_path.exists()
+            and match_ue_filepath_in_folder(
+                unreal_path=engine_build_path,
+                unreal_file_name=UE_ENGINE_BUILD_VERSION_FILE_NAME,
+                dirs_to_join=engine_build_dirs))
 
 def is_ue_project(unreal_project_path: Path) -> bool:
     uproject_file_name = f"{unreal_project_path.stem}.{UE_UPROJECT_EXT}"
